@@ -23,6 +23,8 @@ interface IHttpRequest
 
     public function isDelete() : bool;
 
+    public function isOptions() : bool;
+
     public function hasParameter($name) : bool;
 
     public function getParameters() : array;
@@ -51,7 +53,9 @@ interface IHttpRequest
 
     public function hostname($uri = "") : string;
 
-    public function getRootDir($path = "") : string;
+    public function toLocalPath(string $path) : string;
 
-    public function getRootUri(string $path = "") : string;
+    public function getRootUri() : string;
+
+    public function toUri(string $path) : string;
 }

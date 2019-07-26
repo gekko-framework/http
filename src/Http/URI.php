@@ -60,7 +60,17 @@ class URI
         if (!isset($this->components['path']))
             return null;
 
-        return str_replace("/", DIRECTORY_SEPARATOR, $this->components['path']);
+        $path = $this->components['path'];
+
+        $vp = \Gekko\Env::get("site.virtual_path");
+
+        if (!empty($vp))
+        {
+            $path = \str_replace($vp, "", $path);
+            $path = \str_replace("//", "/", $path);
+        }
+
+        return str_replace("/", DIRECTORY_SEPARATOR, $path);
     }
 
     public function getQuery() : ?string

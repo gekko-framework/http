@@ -7,25 +7,10 @@
 
 namespace Gekko\Http;
 
+use Gekko\Env;
+
 class HttpRequest implements IHttpRequest
 {
-    /**
-     * Application Absolute Path in FileSystem
-     *
-     * @var     string
-     * @example /var/www/gekko
-     */
-    private static $appDir;
-
-    /**
-     * Application Relative URI (include application local path)
-     *
-     * @var     string
-     * @example http://someurl.com => /
-     * @example http://someurl.com/gekko => /gekko
-     */
-    private static $appUri;
-
     /**
      * Application URL including scheme, host, port and path
      *
@@ -70,16 +55,13 @@ class HttpRequest implements IHttpRequest
     
     public function __construct()
     {
-        // Resolve env variables
-        self::$appDir = self::resolveAppDir();
-        self::$appUri = self::resolveAppUri();
-        self::$hostname = self::resolveHostname() . self::$appUri;
+        self::$hostname = $this->resolveHostname();
 
         // Resolve request properties
         $this->headers = apache_request_headers();
         $this->cookies = $_COOKIE;
         $this->method = filter_input(INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_SPECIAL_CHARS);
-        $this->url = $this->buildUrl();
+        $this->url = $this->createUri();
         $this->parameters['get']    = $this->isGet()    ? $this->parseGetParameters() : [];
         $this->parameters['post']   = $this->isPost()   ? $this->parsePostParameters() : [];
         $this->parameters['put']    = $this->isPut()    ? $this->parseInputParameters() : [];
@@ -87,34 +69,33 @@ class HttpRequest implements IHttpRequest
         $this->files = $this->isPost()  ? $this->parseFiles() : [];
     }
 
-    private function buildUrl() : URI
-    {        
+    private function createUri() : URI
+    {
+        // We don't want virtual path here as the REQUEST_URI should contain it
+        $hostname = $this->resolveHostname(false);
+        $request_uri = filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_SPECIAL_CHARS);
         $query = isset($_SERVER['PATH_INFO']) && isset($_SERVER['QUERY_STRING']) ? $_SERVER['QUERY_STRING'] : '';
-        return new URI(self::resolveHostname() . filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_SPECIAL_CHARS) . (empty($query) ? "" : "?{$query}"));
-    }
 
-    private static function resolveAppDir() : string
-    {
-        return dirname(dirname(__DIR__));
-    }
-    
-    /**
-     * Gekko relies on URL rewriting, because of that everything
-     * befores string "index.php" is part of the application's root URI
-     */
-    private static function resolveAppUri() : string
-    {
-        $script = \filter_input(INPUT_SERVER, 'SCRIPT_NAME', FILTER_SANITIZE_URL);
-        $pos = \strpos($script, "index.php");
-        return substr($script, 0, $pos);
-    }
+        return new URI($hostname . $request_uri . (empty($query) ? "" : "?{$query}"));
+    }    
 
-    private static function resolveHostname() : string
+    private function resolveHostname(bool $with_virtual_path = true) : string
     {
         $scheme = filter_input(INPUT_SERVER, 'REQUEST_SCHEME', FILTER_SANITIZE_URL);
         $port = filter_input(INPUT_SERVER, 'SERVER_PORT', FILTER_SANITIZE_URL);
         $servProtocol = filter_input(INPUT_SERVER, 'SERVER_PROTOCOL', FILTER_SANITIZE_URL);
         $host = filter_input(INPUT_SERVER, 'HTTP_HOST', FILTER_SANITIZE_URL);
+        $virtual_path = $with_virtual_path ? Env::get("site.virtual_path") : "";
+        
+        if ($with_virtual_path && strlen($virtual_path) > 0)
+        {
+            if ($virtual_path[0] != '/')
+                $virtual_path = "/" . $virtual_path;
+            
+            if ($virtual_path[strlen($virtual_path)-1] == '/')
+                $virtual_path = \substr($virtual_path, 0, strlen($virtual_path) - 1);
+        }
+            
         
         if (empty($scheme)) {
             $servProtocol = explode('/', $servProtocol);
@@ -125,7 +106,7 @@ class HttpRequest implements IHttpRequest
             }
         }
 
-        return "{$scheme}://{$host}";
+        return "{$scheme}://{$host}{$virtual_path}";
     }
 
     /**
@@ -285,6 +266,11 @@ class HttpRequest implements IHttpRequest
         return strtolower($this->method) == "delete";
     }
 
+    public function isOptions() : bool
+    {
+        return strtolower($this->method) == "options";
+    }
+
     public function hasParameter($name) : bool
     {
         return $this->hasMethodParameter($this->method, $name);
@@ -360,28 +346,36 @@ class HttpRequest implements IHttpRequest
         return self::$hostname . preg_replace('/(\/\/){1}/', '/', "/{$uri}");
     }
 
-    public function getRootDir($path = "") : string
+    public function toLocalPath(string $path) : string
     {
-        if (strlen($path) > 0 && $path[0] != DIRECTORY_SEPARATOR) {
-            $path = DIRECTORY_SEPARATOR . $path;
-        }
-        return urldecode(self::$appDir . "{$path}");
+        return Env::toLocalPath($path);
     }
 
-    public function getRootUri(string $path = "") : string
+    public function getRootUri() : string
     {
+        return "/" . Env::get("site.virtual_path");
+    }
+
+    public function toUri(string $path) : string
+    {
+        $uri = $this->getRootUri();
+
         if ($path == "") {
-            return self::$appUri;
+            return $uri;
         }
 
-        if ($path[0] != '/' && self::$appUri[0] != '/') {
+        if ($path[0] != '/' && strlen($uri) > 0 && $uri[0] != '/') {
             $path = "/{$path}";
         }
 
         if ($path[strlen($path)-1] != '/') {
-            $path .= '/';
+            //$path .= '/';
         }
 
-        return \str_replace('//', '/', self::$appUri . $path);
+        return \str_replace('//', '/', $uri . $path);
+    }
+
+    public function dump() : string {
+        return json_encode(get_object_vars($this));
     }
 }

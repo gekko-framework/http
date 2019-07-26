@@ -7,22 +7,24 @@
 
 namespace Gekko\Http\Routing;
 
+use \Gekko\Http\HttpHandlerType;
+
 class RoutingMap
 {
     /**
-     * @var string
-     */
-    protected $class;
-
-    /**
      * @var bool
      */
-    protected $isClass;
+    protected $is_class;
+
+    /**
+     * @var string
+     */
+    protected $class_name;
     
     /**
      * @var string
      */
-    protected $baseurl;
+    protected $base_url;
 
     /**
      * @var array
@@ -36,14 +38,18 @@ class RoutingMap
 
     public function __construct(string $url = null, string $class = null)
     {
-        $this->baseurl = $url ?: "";
-        $this->isClass = $class != null;
-        $this->className = $class;
+        if (!isset($url) || $url === "/")
+            $this->base_url = null;
+        else
+            $this->base_url = \str_replace("//", "/", $url);
+
+        $this->is_class = $class != null;
+        $this->class_name = $class;
     }
 
-    public function getBaseUrl() : string
+    public function getbase_url() : string
     {
-        return $this->baseurl;
+        return $this->base_url;
     }
 
     public function getRoutes() : array
@@ -58,7 +64,7 @@ class RoutingMap
 
     public function exception(string $path) : void
     {
-        $this->exceptions[] = $path;
+        $this->exceptions[] = $this->makeRoute($path);
     }
 
     public function exceptions(array $paths) : void
@@ -69,19 +75,19 @@ class RoutingMap
     protected function getHandlerType($handler) : int
     {
         if ($handler instanceof \Closure) {
-            return \Gekko\Http\HttpHandlerType::Closure;
+            return HttpHandlerType::Closure;
         }
         
         if (is_string($handler)) {
             // If the routing map is for an HttpController, $handler MUST be a method name
-            return $this->isClass ? \Gekko\Http\HttpHandlerType::Method : \Gekko\Http\HttpHandlerType::HttpClass;
+            return $this->is_class ? HttpHandlerType::Method : HttpHandlerType::HttpClass;
         }
         
         if (is_array($handler) && count($handler) == 2 && method_exists($handler[0], $handler[1])) {
-            return \Gekko\Http\HttpHandlerType::Method;
+            return HttpHandlerType::Method;
         }
         
-        return \Gekko\Http\HttpHandlerType::Unknown;
+        return HttpHandlerType::Unknown;
     }
 
     protected function addRoute(array $methods, $url, $handler) : void
@@ -89,22 +95,22 @@ class RoutingMap
         $routehandler = null;
         $htype = $this->getHandlerType($handler);
 
-        if ($htype == \Gekko\Http\HttpHandlerType::HttpClass && is_string($handler)) {
+        if ($htype == HttpHandlerType::HttpClass && is_string($handler)) {
             if (!in_array(\Gekko\Http\Routing\IHttpController::class, class_implements($handler))) {
                 throw new \Exception("Class does not implement ". \Gekko\Http\Routing\IHttpController::class . ", it cannot be used as HttpController");
             }
             // If the handler is a class name, wrap it in an array
             $routehandler = [$handler];
-        } elseif ($htype == \Gekko\Http\HttpHandlerType::Method && $this->isClass && !is_array($handler)) {
+        } elseif ($htype == HttpHandlerType::Method && $this->is_class && !is_array($handler)) {
             // If the handler is a controller's method, register it as [controllerClass, methodName]
-            $routehandler = [$this->className, $handler];
+            $routehandler = [$this->class_name, $handler];
         } else {
             // Closure
             $routehandler = $handler;
         }
 
         $this->routes[] = [
-            'url' => $this->baseurl . $url,
+            'url' => $this->makeRoute($url),
             'handler' => $routehandler,
             'htype' => $htype,
             'methods' => $methods
@@ -120,6 +126,10 @@ class RoutingMap
                 'htype' => $route['htype'],
                 'methods' => $route['methods']
             ];
+        }
+
+        foreach ($map->exceptions as $exception) {
+            $this->exceptions[] = $exception;
         }
     }
 
@@ -168,5 +178,14 @@ class RoutingMap
     public function patch($url, $handler = null) : void
     {
         $this->addRoute(['PATCH'], $url, $handler);
+    }
+
+    private function makeRoute($url) : string
+    {
+        if (strlen($this->base_url) == 0)
+            return $url;
+            
+        $fullurl = "{$this->base_url}/{$url}";
+        return str_replace("//", "/", $fullurl);
     }
 }

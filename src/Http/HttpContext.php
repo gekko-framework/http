@@ -33,6 +33,7 @@ final class HttpContext implements IHttpContext
      */
     protected $injector;
 
+
     public function __construct()
     {
         $this->middlewares = [];
@@ -43,6 +44,7 @@ final class HttpContext implements IHttpContext
         $this->injector->getContainer()->add(IHttpContext::class, ['reference' => $this]);
     }
 
+    
     public function configure(IDependencyInjector $di)
     {
         // do nothing   
