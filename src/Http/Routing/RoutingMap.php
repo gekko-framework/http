@@ -47,9 +47,9 @@ class RoutingMap
         $this->class_name = $class;
     }
 
-    public function getbase_url() : string
+    public function getBaseUrl() : string
     {
-        return $this->base_url;
+        return $this->base_url ?? "/";
     }
 
     public function getRoutes() : array

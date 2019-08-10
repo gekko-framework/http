@@ -231,10 +231,10 @@ class Router
     protected function tryMatchRoute($route_regex, $request_url) : array
     {
         $matches = [];
-        preg_match_all($route_regex, $request_url, $matches);
+        $matches_count = preg_match_all($route_regex, $request_url, $matches);
 
         // We should have at least 1 capturing group
-        if (!isset($matches[1]) || empty($matches[1][0])) {
+        if ($matches_count === false || $matches_count === 0) {
             return [];
         }
 
