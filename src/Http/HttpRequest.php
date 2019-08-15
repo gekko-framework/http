@@ -338,12 +338,14 @@ class HttpRequest implements IHttpRequest
         return isset($this->cookies[$name]) ? $this->cookies[$name] : null;
     }
 
-    public function hostname($uri = "") : string
+    public function hostname() : string
     {
-        if ($uri == "") {
-            return self::$hostname;
-        }
-        return self::$hostname . preg_replace('/(\/\/){1}/', '/', "/{$uri}");
+        $hostname = self::$hostname;
+        
+        if ($hostname[strlen($hostname)-1] == '/')
+            $hostname = \substr($hostname, 0, strlen($hostname) - 1);
+
+        return $hostname;
     }
 
     public function toLocalPath(string $path) : string
@@ -358,19 +360,31 @@ class HttpRequest implements IHttpRequest
 
     public function toUri(string $path) : string
     {
-        $uri = $this->getRootUri();
+        $uri = $this->hostname() . $this->getRootUri();
 
         if ($path == "") {
             return $uri;
         }
 
-        if ($path[0] != '/' && strlen($uri) > 0 && $uri[0] != '/') {
+        if ($path[0] != '/' && $uri[strlen($uri)-1] != '/')
             $path = "/{$path}";
-        }
+        else if ($path[0] == '/' && $uri[strlen($uri)-1] == '/')
+            $path = \substr($path, 1, \strlen($path) - 1);
 
-        if ($path[strlen($path)-1] != '/') {
-            //$path .= '/';
-        }
+        return "{$uri}{$path}";
+    }
+
+    public function toRelativeUri(string $path) : string
+    {
+        $uri = $this->getRootUri();
+
+        if ($path == "")
+            return $uri;
+
+        if ($path[0] != '/' && strlen($uri) > 0 && $uri[strlen($uri)-1] != '/')
+            $path = "/{$path}";
+        else if ($path[0] == '/' && strlen($uri) > 0 && $uri[strlen($uri)-1] == '/')
+            $path = \substr($path, 1, \strlen($path) - 1);
 
         return \str_replace('//', '/', $uri . $path);
     }

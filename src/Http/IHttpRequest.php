@@ -51,11 +51,13 @@ interface IHttpRequest
 
     public function getCookie($name) : string;
 
-    public function hostname($uri = "") : string;
+    public function hostname() : string;
 
     public function toLocalPath(string $path) : string;
 
     public function getRootUri() : string;
 
     public function toUri(string $path) : string;
+
+    public function toRelativeUri(string $path) : string;    
 }
