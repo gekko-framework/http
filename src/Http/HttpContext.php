@@ -7,7 +7,10 @@
 
 namespace Gekko\Http;
 
+use Gekko\Config\ConfigProvider;
+use Gekko\Config\IConfigProvider;
 use \Gekko\DependencyInjection\{DependencyInjector,IDependencyInjector};
+use Gekko\Env;
 
 final class HttpContext implements IHttpContext
 {
@@ -33,6 +36,13 @@ final class HttpContext implements IHttpContext
      */
     protected $injector;
 
+    /**
+     * Configuration provider
+     * 
+     * @var \Gekko\Config\IConfigProvider
+     */
+    protected $config_provider;
+
 
     public function __construct()
     {
@@ -42,6 +52,13 @@ final class HttpContext implements IHttpContext
         $this->router = new Routing\Router($this->injector);
 
         $this->injector->getContainer()->add(IHttpContext::class, ['reference' => $this]);
+
+        $configPath = Env::toLocalPath(Env::get("config.path") ?? "config");
+
+        $this->config_provider = new ConfigProvider(Env::get("config.driver") ?? "php", Env::get("config.env"), $configPath);
+        
+        // Register the config provider
+        $this->injector->getContainer()->add(IConfigProvider::class, [ "reference" => $this->config_provider ]);
     }
 
     
