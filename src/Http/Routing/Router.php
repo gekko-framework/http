@@ -19,7 +19,7 @@ class Router
     /**
      * @var string
      */
-    private const ROUTE_PARAM_REGEX = '#\{([a-zA-Z\-_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)?:(.+)?\}$#';
+    private const ROUTE_PARAM_REGEX = '#\{([a-zA-Z\-_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)?:(.+)?\}#';
 
     /**
      * @var \Gekko\Http\Routing\RoutingMap
@@ -120,16 +120,27 @@ class Router
                 // If route part is a parameter, process it and add it to the params array
                 if (preg_match(self::ROUTE_PARAM_REGEX, $segment_regex)) {
                     // parseParams returns an array with keys [ name => <var name> , regex => <accepted values> ]
-                    $param = $this->parseParam($segment_regex);
-                    // Add the param to the params array. IMPORTANT: We are using the $i value to keep track of
-                    // the part of the URL this param is occupying
-                    $route_params[$i] = $param;
-                    // This part of the URL regex will contain the param's regex
-                    $path_regex = $param['regex'];
-                }
+                    $params = $this->parseParam($segment_regex);
 
-                // Update the path in the URL regex with the current path
-                $segments_regexes[$i] = "\/?({$path_regex})";
+                    $k = $i;
+                    $segment = "";
+                    foreach ($params as $param)
+                    {
+                        // Add the param to the params array. IMPORTANT: We are using the $i value to keep track of
+                        // the part of the URL this param is occupying
+                        $route_params[$k++] = $param;
+
+                        $segment .= "{$param['prefix']}({$param['regex']}){$param['postfix']}";
+                    }
+
+                    // Update the path in the URL regex with the current path
+                    $segments_regexes[$i] = "\/?{$segment}";
+                }
+                else
+                {
+                    // Update the path in the URL regex with the current path
+                    $segments_regexes[$i] = "\/?({$path_regex})";
+                }
             }
 
             if ($request->getRootUri() !== "/")
@@ -256,20 +267,47 @@ class Router
 
     protected function parseParam(string $param_segment) : array
     {
-        // Remove {}
-        $name_and_regex = substr($param_segment, 1, strlen($param_segment)-2);
-        // Get position of :
-        $pos = strpos($name_and_regex, ":");
-        // Get param name (if it has one)
-        $name = substr($name_and_regex, 0, $pos);
-        // Get and sanitize param regex
-        $regex = $this->sanitizeRegex(substr($name_and_regex, $pos+1));
+        $params = [];
+        $base_offset = 0;
 
-        return [
-            'name' => strlen($name) == 0 ? null : $name,
-            // Default regex for parameters [^/#?]+?
-            'regex' => strlen($regex) == 0 ? "[^\/\#\?]+" : $regex
-        ];
+        do {
+
+            $start_brace = strpos($param_segment, "{", $base_offset);
+            $end_brace = strpos($param_segment, "}", $start_brace);
+            $next_start_brace = strpos($param_segment, "{", $start_brace + 1);
+
+            $prefix = "";
+            $postfix = "";
+            
+            if ($base_offset < $start_brace)
+                $prefix = substr($param_segment, $base_offset, $start_brace);
+
+            if ($next_start_brace === false)
+                $postfix = substr($param_segment, $end_brace + 1);
+            else
+                $postfix = substr($param_segment, $end_brace + 1, $next_start_brace - $end_brace - 1);
+
+            // Remove {}
+            $name_and_regex = substr($param_segment, $start_brace + 1, $end_brace - $start_brace - 1);
+            // Get position of :
+            $pos = strpos($name_and_regex, ":");
+            // Get param name (if it has one)
+            $name = substr($name_and_regex, 0, $pos);
+            // Get and sanitize param regex
+            $regex = $this->sanitizeRegex(substr($name_and_regex, $pos+1));
+
+            $params[] = [
+                'prefix' => $prefix,
+                'name' => strlen($name) == 0 ? null : $name,
+                // Default regex for parameters [^/#?]+?
+                'regex' => strlen($regex) == 0 ? "[^\/\#\?]+" : $regex,
+                'postfix' => $postfix
+            ];
+
+            $base_offset = $next_start_brace;
+        } while ($base_offset !== false);
+
+        return $params;
     }
 
     /**
