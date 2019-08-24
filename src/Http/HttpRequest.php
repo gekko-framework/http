@@ -11,7 +11,6 @@ use Gekko\Env;
 
 class HttpRequest implements IHttpRequest
 {
-    public const PROTO_VER_AUTO = 0;
     public const PROTO_VER_1_0 = 1;
     public const PROTO_VER_1_1 = 11;
     public const PROTO_VER_2_0 = 2;
@@ -86,7 +85,7 @@ class HttpRequest implements IHttpRequest
         $this->files = $this->isPost()  ? $this->parseFiles() : [];
     }*/
 
-    public function __construct(string $verb, URI $url, array $headers = [], int $protocol_version = self::PROTO_VER_AUTO, string $body = "", array $cookies = [], array $files = [])
+    public function __construct(string $verb, URI $url, array $headers = [], int $protocol_version = self::PROTO_VER_1_1, string $body = "", array $cookies = [], array $files = [])
     {
         $this->method = $verb;
         $this->url = $url;

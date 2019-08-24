@@ -13,8 +13,10 @@ use \Gekko\Http\IHttpRequest;
 use \Gekko\Http\HttpHandlerType;
 use \Gekko\Http\StaticResourceHandler;
 use \Gekko\DependencyInjection\IDependencyInjector;
+use Gekko\Http\IHttpMiddleware;
+use Gekko\Http\IHttpResponse;
 
-class Router
+class Router implements IHttpMiddleware
 {
     /**
      * @var string
@@ -39,17 +41,14 @@ class Router
     }
 
 
-    public function __invoke()
+    public function apply(IHttpRequest $request, IHttpResponse $response, callable $next)
     {
-        // As a middleware, it receives $request, $response and $next middleware
-        list($req, $resp, $next) = array_pad(func_get_args(), 3, null);
-
-        if ($req == null || $resp == null) {
+        if ($request == null || $response == null) {
             throw new Exception("Missing parameters for middleware " . __CLASS__);
         }
 
-        $this->enroute($req);
-        return $next($req, $resp);
+        $this->enroute($request);
+        return $next($request, $response);
     }
 
     public function isException(IHttpRequest $request) : bool

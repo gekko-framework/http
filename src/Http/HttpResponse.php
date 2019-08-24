@@ -54,14 +54,28 @@ class HttpResponse implements IHttpResponse
         $this->body .= $content;
     }
 
-    public function setStatusLine(string $value) : void
-    {
-        $this->status_line = $value;
-    }
-
     public function getStatusLine() : string
     {
         return $this->status_line;
+    }
+
+    public function setStatusLine(string $value) : void
+    {
+        $this->status_line = $value;
+    }    
+
+    public function setStatus(int $protocol_version, int $status_code, string $status_expl = "")
+    {
+        $protocol = "HTTP/";
+
+        if ($protocol_version === HttpRequest::PROTO_VER_1_0)
+            $protocol .= "1.0";
+        else if ($protocol_version === HttpRequest::PROTO_VER_1_1)
+            $protocol .= "1.1";
+        else if ($protocol_version === HttpRequest::PROTO_VER_2_0)
+            $protocol .= "2";
+
+        $this->status_line = "{$protocol} {$status_code} {$status_expl}";
     }
 
     public function getStatusCode() : int

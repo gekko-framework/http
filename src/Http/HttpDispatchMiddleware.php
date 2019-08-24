@@ -9,11 +9,10 @@ namespace Gekko\Http;
 
 use \Gekko\DependencyInjection\IDependencyInjector;
 
-class HttpMiddleware
+class HttpDispatchMiddleware implements IHttpMiddleware
 {
     /**
-     * Dependency Injector class used to resolve dependencies in
-     * HttpMiddleware middleware
+     * Dependency Injector class used to resolve dependencies
      *
      * @var \Gekko\DependencyInjection\IDependencyInjector
      */
@@ -24,12 +23,8 @@ class HttpMiddleware
         $this->injector = $injector;
     }
 
-    public function __invoke()
+    public function apply(IHttpRequest $req, IHttpResponse $resp, callable $next)
     {
-        // As a middleware, it receives $request, $response and $next middleware ($next should be null,
-        // because this is the last middleware in the queue)
-        list($req, $resp, $next) = array_pad(func_get_args(), 3, null);
-
         if ($req == null || $resp == null) {
             throw new Exception("Missing parameters for middleware " . __CLASS__);
         }

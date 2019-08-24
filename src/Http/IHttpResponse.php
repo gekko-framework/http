@@ -16,6 +16,8 @@ interface IHttpResponse
     public function getStatusLine() : string;
     
     public function setStatusLine(string $value) : void;
+
+    public function setStatus(int $protocol_version, int $status_code, string $status_expl = "");
     
     public function setHeader(string $header, string $value) : void;
 
