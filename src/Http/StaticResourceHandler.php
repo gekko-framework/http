@@ -12,7 +12,7 @@ class StaticResourceHandler
 
         if (!file_exists($file))
         {
-            $response->setHeaderLine("HTTP/1.1 404 Resource not found");
+            $response->setStatusLine("HTTP/1.1 404 Resource not found");
             return "Resource not found";
         }
 

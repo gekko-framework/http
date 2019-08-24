@@ -9,11 +9,15 @@ namespace Gekko\Http;
 
 interface IHttpRequest
 {
+    public function getBody() : string;
+
     public function addProperty(string $name, $val) : void;
 
     public function setProperty(string $name, $val) : void;
 
     public function getProperty(string $name);
+
+    public function getProtocolVersion() : int;
 
     public function isPost() : bool;
 
@@ -24,16 +28,6 @@ interface IHttpRequest
     public function isDelete() : bool;
 
     public function isOptions() : bool;
-
-    public function hasParameter($name) : bool;
-
-    public function getParameters() : array;
-
-    public function getParameter($name);
-
-    public function hasMethodParameter($method, $name) : bool;
-
-    public function getMethodParameter($method, $name);
 
     public function getMethod() : string;
 

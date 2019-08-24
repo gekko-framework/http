@@ -12,16 +12,24 @@ interface IHttpResponse
     public function setBody(string $content) : void;
 
     public function appendToBody(string $content) : void;
-
+    
+    public function getStatusLine() : string;
+    
+    public function setStatusLine(string $value) : void;
+    
     public function setHeader(string $header, string $value) : void;
-
-    public function setHeaderLine(string $value) : void;
-
-    public function setHeaders(array $headers) : void;
 
     public function getHeader(string $header) : ?string;
 
-    public function getHeaders($headers) : array;
+    public function setHeaders(array $headers) : void;
 
-    public function setCookie(string $name, string $value, int $exp = null, string $path = null) : void;
+    public function getHeaders() : array;
+
+    public function setCookie(HttpCookie $cookie) : void;
+
+    public function getCookie(string $cookie_name) : ?HttpCookie;    
+
+    public function setCookies(array $cookies) : void;
+    
+    public function getCookies() : array;        
 }

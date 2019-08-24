@@ -37,7 +37,7 @@ class HttpMiddleware
         // If the route is null, the router has failed to enroute the request
         // we need to return 404
         if (!$this->injector->getContainer()->has(Routing\Route::class)) {
-            $resp->setHeaderLine("HTTP/1.1 404 Resource not found");
+            $resp->setStatusLine("HTTP/1.1 404 Resource not found");
             $resp->setBody("Resource not found");
             return $next($req, $resp);
         }
@@ -47,7 +47,7 @@ class HttpMiddleware
         $handler = $route->getHandler();
 
         if ($handler == null) {
-            $resp->setHeaderLine("HTTP/1.1 404 Resource not found");
+            $resp->setStatusLine("HTTP/1.1 404 Resource not found");
             $resp->setBody("Resource not found");
             return $next($req, $resp);
         }
@@ -66,16 +66,41 @@ class HttpMiddleware
         $result = $invokable();
         $ob = ob_get_clean();
         if (!($result instanceof IHttpResponse))
+        {
             $resp->appendToBody($result ?? $ob ?? "");
+        }
+        else if ($result !== $resp)
+        {
+            $resp->setStatusLine($result->getStatusLine());
+            $resp->setHeaders($result->getHeaders());
+            $resp->setCookies($result->getCookies());
+            $resp->setBody($result->getBody());
+        }
         return $next($req, $resp);
     }
 
-    public function mapParameters(IHttpRequest $httprequest, $handler, Routing\RouteParams $routeParams)
+    public function mapParameters(IHttpRequest $http_request, $handler, Routing\RouteParams $routeParams)
     {
         $method_params = $this->methodSignature($handler);
         if (empty($method_params)) {
             return [];
         }
+
+        $query_parameters = [];
+        $body_parameters = [];
+
+        // Parse the query string
+        $query = $http_request->getURI()->getQuery();
+        if (strlen($query) > 0)
+            parse_str($query, $query_parameters);
+        
+        $content_type = $http_request->getHeader('Content-Type');
+        $body = $http_request->getBody();
+
+        if ($content_type === "application/json")
+            $body_parameters = json_decode($body, true);
+        else if ($content_type === "application/x-www-form-urlencoded")
+            parse_str($body, $body_parameters);
 
         $args = [];
         $unnamedParamsIndex = 0;
@@ -90,9 +115,12 @@ class HttpMiddleware
             // Look for route parameters using the name (named parameters)
             if ($routeParams->has($name)) {
                 $val = $routeParams[$name];
-            } // Look for parameters in request boyd
-            else if ($httprequest->hasParameter($name)) {
-                $val = $httprequest->getParameter($name);
+            } // Look for parameters in request body
+            else if (isset($body_parameters[$name])) {
+                $val = $body_parameters[$name];
+            } // Look for parameters in the query
+            else if (isset($query_parameters[$name])) {
+                $val = $query_parameters[$name];
             } // Look for route parameters using an index-based aproach
             else if ($routeParams->has($unnamedParamsIndex)) {
                 $val = $routeParams[$unnamedParamsIndex];

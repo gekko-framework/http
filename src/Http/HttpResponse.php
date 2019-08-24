@@ -10,9 +10,11 @@ namespace Gekko\Http;
 class HttpResponse implements IHttpResponse
 {
     /**
-     * @var array
+     * HTTP response status
+     *
+     * @var string
      */
-    protected $headerLines;
+    protected $status_line;
 
     /**
      * @var array
@@ -20,7 +22,7 @@ class HttpResponse implements IHttpResponse
     protected $headers;
 
     /**
-     * @var array
+     * @var \Gekko\Http\HttpCookie[]
      */
     protected $cookies;
 
@@ -29,10 +31,11 @@ class HttpResponse implements IHttpResponse
      */
     protected $body;
 
-    public function __construct()
+    public function __construct(string $status_line = "HTTP/1.1 200 OK")
     {
-        $this->headerLines = [];
+        $this->status_line = $status_line;
         $this->headers = [];
+        $this->cookies = [];
         $this->body = "";
     }
 
@@ -51,14 +54,29 @@ class HttpResponse implements IHttpResponse
         $this->body .= $content;
     }
 
-    public function setHeader(string $header, string $value) : void
+    public function setStatusLine(string $value) : void
     {
-        $this->headers[$header] = $value;
+        $this->status_line = $value;
     }
 
-    public function setHeaderLine(string $value) : void
+    public function getStatusLine() : string
     {
-        $this->headerLines[] = $value;
+        return $this->status_line;
+    }
+
+    public function getStatusCode() : int
+    {
+        $first_space = strpos($this->status_line, ' ', 0);
+        
+        if ($first_space === false)
+            return -1;
+
+        $second_space = strpos($this->status_line, ' ', $first_space + 1);
+
+        if ($second_space === false)
+            return intval(trim(substr($this->status_line, $first_space + 1)));
+
+        return intval(trim(substr($this->status_line, $first_space + 1, strpos($this->status_line, ' ', $first_space + 1 ) - $first_space - 1)));
     }
 
     public function setHeaders(array $headers) : void
@@ -66,33 +84,63 @@ class HttpResponse implements IHttpResponse
         $this->headers = $headers;
     }
 
+    public function setHeader(string $header, string $value) : void
+    {
+        $this->headers[$header] = $value;
+    }
+
     public function getHeader(string $header) : ?string
     {
         return isset($this->headers[$header]) ? $this->headers[$header] : null;
     }
 
-    public function getHeaders($headers) : array
+    public function getHeaders() : array
     {
         return $this->headers;
     }
 
-    public function setCookie(string $name, string $value, int $exp = null, string $path = null) : void
+    public function setCookie(HttpCookie $cookie) : void
     {
-        setcookie($name, $value, $exp, $path);
+        $this->cookies[$cookie->name] = $cookie;
+    }
+
+    public function getCookie(string $cookie_name) : ?HttpCookie
+    {
+        return isset($this->cookies[$cookie_name]) ? $this->cookies[$cookie_name] : null;
+    }
+
+    public function setCookies(array $cookies) : void
+    {
+        $this->cookies = $cookies;
+    }
+
+    public function getCookies() : array
+    {
+        return $this->cookies;
     }
 
     public function __toString() : string
     {
-        if (!empty($this->headerLines)) {
-            foreach ($this->headerLines as $headerLine) {
-                header("{$headerLine}");
+        $raw = "{$this->status_line}\r\n";
+
+        if (!empty($this->headers))
+        {
+            foreach ($this->headers as $header => $value)
+            {
+                $raw .= "{$header}: $value\r\n";
             }
         }
-        if (!empty($this->headers)) {
-            foreach ($this->headers as $header => $value) {
-                header("{$header}: $value");
+
+        if (!empty($this->cookies))
+        {
+            foreach ($this->cookies as $cookie) 
+            {
+                $raw .= "set-cookie: {$cookie}\r\n";
             }
         }
-        return "{$this->body}";
+
+        $raw .= "\r\n{$this->body}";
+
+        return $raw;
     }
 }

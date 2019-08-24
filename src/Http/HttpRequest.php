@@ -11,12 +11,24 @@ use Gekko\Env;
 
 class HttpRequest implements IHttpRequest
 {
+    public const PROTO_VER_AUTO = 0;
+    public const PROTO_VER_1_0 = 1;
+    public const PROTO_VER_1_1 = 11;
+    public const PROTO_VER_2_0 = 2;
+
     /**
      * Application URL including scheme, host, port and path
      *
      * @var string
      */
-    private static $hostname;
+    private $hostname;
+
+    /**
+     * HTTP Protocol version
+     *
+     * @var int
+     */
+    private $protocol_version;
 
     /**
      * @var URI
@@ -27,6 +39,11 @@ class HttpRequest implements IHttpRequest
      * @var string
      */
     private $method;            // GET, POST, PUT OR DELETE
+
+    /**
+     * @var string
+     */
+    private $body;
 
     /**
      * @var array
@@ -53,9 +70,9 @@ class HttpRequest implements IHttpRequest
      */
     private $properties;        // Used by framework
     
-    public function __construct()
+    /*public function __construct()
     {
-        self::$hostname = $this->resolveHostname();
+        $this->hostname = $this->resolveHostname();
 
         // Resolve request properties
         $this->headers = apache_request_headers();
@@ -67,165 +84,33 @@ class HttpRequest implements IHttpRequest
         $this->parameters['put']    = $this->isPut()    ? $this->parseInputParameters() : [];
         $this->parameters['delete'] = $this->isDelete() ? $this->parseInputParameters() : [];
         $this->files = $this->isPost()  ? $this->parseFiles() : [];
-    }
+    }*/
 
-    private function createUri() : URI
+    public function __construct(string $verb, URI $url, array $headers = [], int $protocol_version = self::PROTO_VER_AUTO, string $body = "", array $cookies = [], array $files = [])
     {
-        // We don't want virtual path here as the REQUEST_URI should contain it
-        $hostname = $this->resolveHostname(false);
-        $request_uri = filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_SPECIAL_CHARS);
-        $query = isset($_SERVER['PATH_INFO']) && isset($_SERVER['QUERY_STRING']) ? $_SERVER['QUERY_STRING'] : '';
-
-        return new URI($hostname . $request_uri . (empty($query) ? "" : "?{$query}"));
-    }    
-
-    private function resolveHostname(bool $with_virtual_path = true) : string
-    {
-        $scheme = filter_input(INPUT_SERVER, 'REQUEST_SCHEME', FILTER_SANITIZE_URL);
-        $port = filter_input(INPUT_SERVER, 'SERVER_PORT', FILTER_SANITIZE_URL);
-        $servProtocol = filter_input(INPUT_SERVER, 'SERVER_PROTOCOL', FILTER_SANITIZE_URL);
-        $host = filter_input(INPUT_SERVER, 'HTTP_HOST', FILTER_SANITIZE_URL);
-        $virtual_path = $with_virtual_path ? Env::get("site.virtual_path") : "";
+        $this->method = $verb;
+        $this->url = $url;
+        $this->headers = $headers;
+        $this->body = $body;
+        $this->cookies = $cookies;
+        $this->files = $files;
+        $this->protocol_version = $protocol_version;
         
-        if ($with_virtual_path && strlen($virtual_path) > 0)
-        {
-            if ($virtual_path[0] != '/')
-                $virtual_path = "/" . $virtual_path;
-            
-            if ($virtual_path[strlen($virtual_path)-1] == '/')
-                $virtual_path = \substr($virtual_path, 0, strlen($virtual_path) - 1);
-        }
-            
-        
-        if (empty($scheme)) {
-            $servProtocol = explode('/', $servProtocol);
-            if (intval($port) == 443 || strtolower($servProtocol[0]) === "https") {
-                $scheme = "https";
-            } else {
-                $scheme = "http";
-            }
-        }
+        $this->hostname = "{$url->getScheme()}://{$url->getHost()}";
+        $port = $url->getPort();
 
-        return "{$scheme}://{$host}{$virtual_path}";
+        if (!empty($port) && $port !== "80" && $port !== "443")
+            $this->hostname .= ":{$port}";
     }
 
-    /**
-     * ====================================================================================
-     *
-     * @author Leo Brugnara
-     * @desc   Sanitize POST parameters
-     * @return array
-     * ====================================================================================
-     */
-    protected function parsePostParameters() : array
+    public function getBody() : string
     {
-        $_POST = filter_input_array(INPUT_POST, FILTER_SANITIZE_STRING);
-        $tmp = $_POST;
-        if (isset($this->headers['Content-Type']) && strstr(trim($this->headers['Content-Type']), "application/json") !== false) {
-            $body = file_get_contents("php://input");
-            $tmp = json_decode($body, true);
-        }
-        if (empty($tmp)) {
-            return [];
-        }
-        foreach ($tmp as $key => $value) {
-            $tmp[$key] = self::sanitize($key, $value);
-        }
-        return $tmp;
+        return $this->body;
     }
 
-    /**
-     * ====================================================================================
-     *
-     * @author Leo Brugnara
-     * @desc   Sanitize GET parameters
-     * @return array
-     * ====================================================================================
-     */
-    protected function parseGetParameters() : array
+    public function getProtocolVersion() : int
     {
-        $_GET = filter_input_array(INPUT_GET, FILTER_SANITIZE_STRING);
-        $tmp = $_GET;
-        if (empty($tmp)) {
-            return [];
-        }
-        foreach ($tmp as $key => $value) {
-            $tmp[$key] = self::sanitize($key, $value);
-        }
-        return $tmp;
-    }
-
-    /**
-     * ====================================================================================
-     *
-     * @author Leo Brugnara
-     * @desc   Handle php://input and sanitize the content
-     * @return array
-     * ====================================================================================
-     */
-    protected function parseInputParameters() : array
-    {
-        $vars = file_get_contents("php://input");
-        if (empty($vars)) {
-            return [];
-        }
-
-        $arrayVars = [];
-        if (isset($this->headers['Content-Type']) && trim($this->headers['Content-Type']) === "application/json") {
-            $arrayVars = json_decode($vars, true) or [];
-        } else {
-            parse_str($vars, $arrayVars);
-        }
-
-        if (empty($arrayVars)) {
-            return [];
-        }
-
-        foreach ($arrayVars as $key => $value) {
-            $arrayVars[$key] = self::sanitize($key, $value);
-        }
-        return $arrayVars;
-    }
-
-    protected function parseFiles() : array
-    {
-        if (empty($_FILES)) {
-            return [];
-        }
-        $files = $_FILES;
-        $newFiles = [];
-        // a mapping of $_FILES indices for validity checking
-        foreach ($files as $inputName => $data) {
-            foreach ($data as $key => $value) {
-                if (is_array($value)) {
-                    foreach ($value as $i => $v) {
-                        $newFiles[$inputName][$i][$key] = $v;
-                    }
-                } else {
-                    $newFiles[$inputName][$key] = $value;
-                }
-            }
-        }
-
-        return $newFiles;
-    }
-
-    // TODO: Sanitize input values
-    public static function sanitize($name, $value)
-    {
-        if (is_array($value)) {
-            foreach ($value as $k => $v) {
-                if (is_array($v)) {
-                    $value[$k] = static::sanitize($k, $v);
-                } else {
-                    $value[$k] = $v;
-                }
-            }
-        } else {
-            $value = $value;
-        }
-
-        return $value;
+        return $this->protocol_version;
     }
 
     public function addProperty(string $name, $val) : void
@@ -271,33 +156,6 @@ class HttpRequest implements IHttpRequest
         return strtolower($this->method) == "options";
     }
 
-    public function hasParameter($name) : bool
-    {
-        return $this->hasMethodParameter($this->method, $name);
-    }
-
-    public function getParameters() : array
-    {
-        return $this->parameters;
-    }
-
-    public function getParameter($name)
-    {
-        return $this->getMethodParameter($this->method, $name);
-    }
-
-    public function hasMethodParameter($method, $name) : bool
-    {
-        $method = strtolower($method);
-        return isset($this->parameters[$method]) && isset($this->parameters[$method][$name]);
-    }
-
-    public function getMethodParameter($method, $name)
-    {
-        $method = strtolower($method);
-        return isset($this->parameters[$method]) && isset($this->parameters[$method][$name]) ? $this->parameters[$method][$name] : null;
-    }
-
     public function getMethod() : string
     {
         return strtoupper($this->method);
@@ -340,7 +198,7 @@ class HttpRequest implements IHttpRequest
 
     public function hostname() : string
     {
-        $hostname = self::$hostname;
+        $hostname = $this->hostname;
         
         if ($hostname[strlen($hostname)-1] == '/')
             $hostname = \substr($hostname, 0, strlen($hostname) - 1);

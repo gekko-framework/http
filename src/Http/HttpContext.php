@@ -93,20 +93,27 @@ final class HttpContext implements IHttpContext
         ob_start();
 
         // Create the HttpRequest object that contains all the information of the current request
-        $request = new HttpRequest();
+        $request = $this->createHttpRequest();
 
         // Call dispatch here to pass the request through all the middlewares
         $response = $this->dispatch($request);
 
-        // Consume all the output that do not belong to the response and show it just if "gdebug" is defined
-        $outbuff = ob_get_clean();
-        
-        if ($request->hasParameter("gdebug")) {
-            echo $outbuff;
-        }
+        // Consume all the output that do not belong to the response
+        ob_get_clean();        
 
-        // With the buffer cleaned, show the response
-        echo $response;
+        // Write the response status line
+        header($response->getStatusLine());
+
+        // Set the headers
+        foreach ($response->getHeaders() as $header => $value)
+            header("{$header}: $value");
+
+        // Include set-cookie headers
+        foreach ($response->getCookies() as $cookie) 
+            header("set-cookie: {$cookie}");
+
+        // Echo the response's body
+        echo $response->getBody();
 
         // Call the onFinish method to let HttpContext make the clean up
         $this->onFinish();
@@ -180,5 +187,96 @@ final class HttpContext implements IHttpContext
     public function getInjector() : IDependencyInjector
     {
         return $this->injector;
+    }
+
+    protected function createHttpRequest() : IHttpRequest
+    {
+        // VERB
+        $method = filter_input(INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_SPECIAL_CHARS);
+
+        // URI
+        // We don't want virtual path here as the REQUEST_URI should contain it
+        $hostname = $this->resolveHostname(false);
+        $request_uri = strtok(filter_input(INPUT_SERVER, 'REQUEST_URI', FILTER_SANITIZE_SPECIAL_CHARS), '?');
+        $query = isset($_SERVER['QUERY_STRING']) ? $_SERVER['QUERY_STRING'] : '';
+        $uri = new URI($hostname . $request_uri . (empty($query) ? "" : "?{$query}"));
+
+        // HEADERS
+        $headers = apache_request_headers();
+
+        // PROTOCOL
+        $server_protocol = filter_input(INPUT_SERVER, 'SERVER_PROTOCOL', FILTER_SANITIZE_URL);
+        $request_protocol = HttpRequest::PROTO_VER_AUTO;
+
+        if (strpos($server_protocol, "/2") !== false)
+            $request_protocol = HttpRequest::PROTO_VER_2_0;
+        else if (strpos($server_protocol, "/1.1") !== false)
+            $request_protocol = HttpRequest::PROTO_VER_1_1;
+        else if (strpos($server_protocol, "/1.0") !== false)
+            $request_protocol = HttpRequest::PROTO_VER_1_0;
+
+        // BODY
+        $body = file_get_contents("php://input");
+
+        // COOKIES
+        $cookies = $_COOKIE;
+
+        // FILES
+        $files = $this->processFiles();
+
+        return new HttpRequest($method, $uri, $headers, $request_protocol, $body !== false ? $body : "", $cookies, $files);
+    }
+
+    protected function resolveHostname(bool $with_virtual_path = true) : string
+    {
+        $scheme = filter_input(INPUT_SERVER, 'REQUEST_SCHEME', FILTER_SANITIZE_URL);
+        $port = filter_input(INPUT_SERVER, 'SERVER_PORT', FILTER_SANITIZE_URL);
+        $server_protocol = filter_input(INPUT_SERVER, 'SERVER_PROTOCOL', FILTER_SANITIZE_URL);
+        $host = filter_input(INPUT_SERVER, 'HTTP_HOST', FILTER_SANITIZE_URL);
+        $virtual_path = $with_virtual_path ? Env::get("site.virtual_path") : "";
+        
+        if ($with_virtual_path && strlen($virtual_path) > 0)
+        {
+            if ($virtual_path[0] != '/')
+                $virtual_path = "/" . $virtual_path;
+            
+            if ($virtual_path[strlen($virtual_path)-1] == '/')
+                $virtual_path = \substr($virtual_path, 0, strlen($virtual_path) - 1);
+        }
+            
+        
+        if (empty($scheme)) {
+            $server_protocol = explode('/', $server_protocol);
+            if (intval($port) == 443 || strtolower($server_protocol[0]) === "https") {
+                $scheme = "https";
+            } else {
+                $scheme = "http";
+            }
+        }
+
+        return "{$scheme}://{$host}{$virtual_path}";
+    }
+
+    protected function processFiles() : array
+    {
+        if (empty($_FILES)) {
+            return [];
+        }
+        $files = $_FILES;
+        $newFiles = [];
+        // a mapping of $_FILES indices for validity checking
+        foreach ($files as $inputName => $data) {
+            foreach ($data as $key => $value) {
+                if (is_array($value)) {
+                    foreach ($value as $i => $v) {
+                        $newFiles[$inputName][$i][$key] = $v;
+                    }
+                } else {
+                    $newFiles[$inputName][$key] = $value;
+                }
+            }
+        }
+
+        return $newFiles;
     }
 }
