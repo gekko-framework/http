@@ -53,5 +53,7 @@ interface IHttpRequest
 
     public function toUri(string $path) : string;
 
-    public function toRelativeUri(string $path) : string;    
+    public function toRelativeUri(string $path) : string;
+
+    public function createHttpResponse() : IHttpResponse;
 }

@@ -113,6 +113,11 @@ class HttpResponse implements IHttpResponse
         return $this->headers;
     }
 
+    public function hasCookie(string $cookie_name) : bool
+    {
+        return isset($this->cookies[$cookie_name]);
+    }
+
     public function setCookie(HttpCookie $cookie) : void
     {
         $this->cookies[$cookie->name] = $cookie;

@@ -246,6 +246,13 @@ class HttpRequest implements IHttpRequest
         return \str_replace('//', '/', $uri . $path);
     }
 
+    public function createHttpResponse() : IHttpResponse
+    {
+        $response = new HttpResponse();
+        $response->setStatus($this->protocol_version, 200, "OK");
+        return $response;
+    }
+
     public function dump() : string {
         return json_encode(get_object_vars($this));
     }

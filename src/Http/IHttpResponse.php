@@ -27,6 +27,8 @@ interface IHttpResponse
 
     public function getHeaders() : array;
 
+    public function hasCookie(string $cookie_name) : bool;
+
     public function setCookie(HttpCookie $cookie) : void;
 
     public function getCookie(string $cookie_name) : ?HttpCookie;    

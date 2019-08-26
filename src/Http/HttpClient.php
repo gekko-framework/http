@@ -10,7 +10,7 @@ class HttpClient
     {
     }
 
-    public function exec(HttpRequest $request, ?array &$redirects = null) : IHttpResponse
+    public function exec(HttpRequest $request, bool $verbose = false, ?string $stderr_file = null, ?array &$redirects = null) : IHttpResponse
     {
         $headers = [];
         foreach ($request->getHeaders() as $header_name => $header_value)
@@ -35,8 +35,6 @@ class HttpClient
         else if ($req_proto_ver === HttpRequest::PROTO_VER_2_0)
             $curl_proto_ver = CURL_HTTP_VERSION_2;
         
-        $log_file = str_replace("/", "_", $request->getURI()->getHost() . $request->getURI()->getPath());
-
         $options = [
             CURLOPT_RETURNTRANSFER => true,     // return web page
             CURLOPT_HEADER         => true,     // return headers
@@ -50,37 +48,55 @@ class HttpClient
             CURLOPT_CUSTOMREQUEST => $request->getMethod(),
             CURLOPT_POST => $request->getMethod() === "POST",
             CURLOPT_POSTFIELDS => $request->getBody(),
-            CURLOPT_VERBOSE => true,
             CURLOPT_HTTP_VERSION => $curl_proto_ver,
-            //CURLOPT_STDERR => fopen(\Gekko\Env::toLocalPath(".tmp/{$log_file}.log"), 'a+')
+            CURLOPT_VERBOSE => $verbose
         ];
+
+        if ($stderr_file !== null)
+            $options[CURLOPT_STDERR] = fopen($stderr_file, 'a+');
 
         $ch = curl_init($request->getURI());
         curl_setopt_array($ch, $options);
         
         $content = curl_exec($ch);        
         $err = curl_errno($ch);
-        $errmsg = curl_error($ch);        
-        $info = curl_getinfo($ch);
-        
-        $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        
+
+        $response = null;
+
+        if ($err !== 0)
+        {
+            $response = new HttpResponse();
+            $response->setStatus($request->getProtocolVersion(), 500, "Internal Server Error");
+
+            if ($verbose)
+                $response->setBody(curl_error($ch));
+        }
+        else
+        {
+            $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+
+            $full_headers_str = trim(substr($content, 0, $header_size));
+            $full_headers = explode("\r\n\r\n", $full_headers_str);        
+            $full_header = array_pop($full_headers);
+            
+            if ($redirects !== null)
+            {
+                foreach ($full_headers as $redirected_header)
+                {
+                    $redirects[] = $this->createHttpResponse($redirected_header);
+                }
+            }
+            
+            $body = substr($content, $header_size);
+            $response = $this->createHttpResponse($full_header, $body);
+        }
+
         curl_close($ch);
 
-        $full_headers_str = trim(substr($content, 0, $header_size));
-        $full_headers = explode("\r\n\r\n", $full_headers_str);        
-        $full_header = array_pop($full_headers);
-        
-        if ($redirects !== null)
-        {
-            foreach ($full_headers as $redirected_header)
-            {
-                $redirects[] = $this->createHttpResponse($redirected_header);
-            }
-        }
-        
-        $body = substr($content, $header_size);
-        return $this->createHttpResponse($full_header, $body);
+        if ($stderr_file !== null)
+            fclose($options[CURLOPT_STDERR]);
+
+        return $response;
     }
 
     protected function createHttpResponse(string $full_header, string $body = "")
