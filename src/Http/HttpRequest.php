@@ -246,10 +246,10 @@ class HttpRequest implements IHttpRequest
         return \str_replace('//', '/', $uri . $path);
     }
 
-    public function createHttpResponse() : IHttpResponse
+    public function createHttpResponse(int $status = 200, string $description = "OK") : IHttpResponse
     {
         $response = new HttpResponse();
-        $response->setStatus($this->protocol_version, 200, "OK");
+        $response->setStatus($this->protocol_version, $status, $description);
         return $response;
     }
 

@@ -55,5 +55,5 @@ interface IHttpRequest
 
     public function toRelativeUri(string $path) : string;
 
-    public function createHttpResponse() : IHttpResponse;
+    public function createHttpResponse(int $status = 200, string $description = "OK") : IHttpResponse;
 }
