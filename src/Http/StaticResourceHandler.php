@@ -4,17 +4,40 @@ namespace Gekko\Http;
 
 class StaticResourceHandler 
 {
-    public function serve(IHttpRequest $request, IHttpResponse $response) : string
+    public function serve(IHttpRequest $request, IHttpResponse $response) : IHttpResponse
     {
         $resource_path = $request->getURI()->getLocalPath();
 
         $file = $request->toLocalPath($resource_path);
 
-        if (!file_exists($file))
+        return $this->serveFile($file, $response);        
+    }
+
+    public function serveFile(string $filename, IHttpResponse $response) : IHttpResponse
+    {
+        if (!file_exists($filename))
         {
             $response->setStatusLine("HTTP/1.1 404 Resource not found");
             return "Resource not found";
         }
+
+        $file_content = $this->getFileContent($filename);
+
+        if ($file_content === null)
+        {
+            $response->setStatusLine("HTTP/1.1 404 Resource not found");
+            return "Resource not found";
+        }
+        
+        $response->setHeader("Content-Type", $file_content["content-type"]);
+        $response->setBody($file_content["content"]);
+        return $response;
+    }
+
+    public function getFileContent(string $file) : ?array
+    {
+        if (!file_exists($file))
+            return null;
 
         $isDirectory = is_dir($file);
         $ext = null;
@@ -37,14 +60,17 @@ class StaticResourceHandler
             $content_type = "text/plain";
         }
 
-        ob_start();
         if (!$isDirectory) {
-            echo \file_get_contents($file);
-        } else {
-            echo "TODO: Make a script to list directories";
-        }
-        $response->setHeader("Content-Type", $content_type);
-        return ob_get_clean();
+            return [
+                "content" =>  \file_get_contents($file),
+                "content-type" => $content_type
+            ];
+        } 
+
+        return [
+            "content" => "TODO: Make a script to list directories",
+            "content-type" => $content_type
+        ];
     }
 
     public function getContentTypeByExt($ext)
