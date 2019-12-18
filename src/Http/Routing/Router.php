@@ -173,9 +173,7 @@ class Router implements IHttpMiddleware
                 $request_url = '/' . $request_url;
 
             // Find coincidences and filter results
-            Utils::echopre("URL Regex", $route_full_regex, $request_url, "_____________");
             $matches = $this->tryMatchRoute($route_full_regex, $request_url);
-            Utils::echopre("URL Matches", $matches, "_____________");
 
             // No matches, "leave this route" (pun intended)
             if (empty($matches))
@@ -212,7 +210,6 @@ class Router implements IHttpMiddleware
                 // Save the parameter with its name if it has one, or use a 0-based index
                 $route_params_obj[($route_param['name']  != null ? $route_param['name'] : $j++)] = $param_value;
             }
-            Utils::echopre("URL Params", $route_params_obj, "_____________");
 
             // If handler types are Closure or Method, we finished our search, but if the type is
             // HttpController, this is the first step, now we need to use the RoutingMap object

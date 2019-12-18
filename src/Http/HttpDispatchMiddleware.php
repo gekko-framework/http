@@ -123,7 +123,7 @@ class HttpDispatchMiddleware implements IHttpMiddleware
             }
 
             // DI will resolve the dependency or will throw an error if it cannot resolve the parameter
-            if ($val == null && !$optional) {
+            if ($val === null && !$optional) {
                 continue;
             }
 
